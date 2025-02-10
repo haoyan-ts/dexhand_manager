@@ -1,5 +1,4 @@
 import numpy as np
-import quaternion
 from scipy.linalg import svd
 from scipy.spatial import KDTree  # For efficient nearest neighbor search
 import matplotlib.pyplot as plt
@@ -88,7 +87,6 @@ def standard_icp(source_points, target_points, max_iterations=100, tolerance=1e-
 
     # Initialize transformation
     rotation = np.eye(3)
-    q = quaternion.from_rotation_matrix(rotation)
     translation = np.zeros((3, 1))
     t = np.zeros((3, 1))
     transform = np.eye(4)
@@ -123,7 +121,6 @@ def standard_icp(source_points, target_points, max_iterations=100, tolerance=1e-
 
         rotation = rotation @ new_rotation
         translation += new_translation
-        q = q * quaternion.from_rotation_matrix(rotation)
         t += translation
         mse_old = mse_new
 
@@ -131,8 +128,6 @@ def standard_icp(source_points, target_points, max_iterations=100, tolerance=1e-
     print(f"Converged after {iteration+1} iterations with error {err:.6f}")
 
     # Construct the 4x4 transformation matrix
-    transform[:3, :3] = quaternion.as_rotation_matrix(q)
-    transform[:3, 3] = t.flatten()
     rotation = transform[:3, :3]
     translation = transform[:3, 3]
 

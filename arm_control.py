@@ -4,8 +4,11 @@ from piper_sdk import *
 import time
 import math
 
+from scipy.spatial.transform import Rotation as R
 import pydantic
 from pydantic import BaseModel, ConfigDict, TypeAdapter
+
+from mapping import Complex
 
 
 class BaseArm:
@@ -95,10 +98,12 @@ class PiperArm(BaseArm):
     piper: C_PiperInterface
     speed_ratio: int = 30
     command_timestamps: deque
+    mapping: Complex
 
     def __init__(self):
         self.piper = C_PiperInterface()
         self.command_timestamps = deque(maxlen=10)
+        self.mapping = Complex.CreateDefaultComplex()
 
     def record_timestamp(self):
         self.command_timestamps.append(time.time())
@@ -216,6 +221,10 @@ class PiperArm(BaseArm):
 
         return resp
     
+    def calibrate(self, vertex_targets: list[list[float]]):
+        self.mapping.set_targets(vertex_targets)
+        
+    
     def joint_ctrl(self, joints):
         self.record_timestamp()
         piper = self.piper
@@ -238,6 +247,25 @@ class PiperArm(BaseArm):
         piper.MotionCtrl_2(0x01, 0x01, self.speed_ratio, 0x00)
 
         print(f"freq: {self.calculate_average_rate()} Hz")
+
+    def pose_ctrl(self, pose):
+        self.record_timestamp()
+        piper = self.piper
+
+        position = pose[:3]
+        orientation = pose[3:]
+
+        x = position[0]
+        y = position[1]
+        z = position[2]
+        orientation = orientation
+
+        print(f"Position: {position}")
+        print(f"Orientation: {orientation}")
+
+        # Convert Euler angles to quaternion
+        # r = R.from_euler('xyz', orientation, degrees=False)
+        # quaternion = r.as_quat()
 
 
     def get_joint_status(self):

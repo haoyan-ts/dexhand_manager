@@ -1,7 +1,12 @@
+import matplotlib.pyplot as plt
+import matplotlib
+from matplotlib.animation import FuncAnimation
 import json
 import math
+import queue
 import socket
 import time
+import numpy as np
 import pydantic
 from piper_sdk import *
 import asyncio
@@ -12,7 +17,11 @@ from arm_control import BaseArm, PiperArm, PiperArmStatus, PiperJointStatus
 from pydantic import BaseModel
 
 from inspire_hand import InspireHand
+from kalman import KalmanFilter
 
+from logging import getLogger
+
+logger = getLogger(__name__)
 
 class BaseRequest(BaseModel):
     pass
@@ -48,7 +57,11 @@ class ArmSetJointAnglesRequest(BaseModel):
     arm_type: Literal["piper", "nova"]
     joint_angles: list
 
-
+class ArmSetEndEffectorPoseRequest(BaseModel):
+    command: str = "arm_set_end_effector_pose"
+    arm_side: Literal["left", "right"]
+    arm_type: Literal["piper", "nova"]
+    pose: list
 
 class BoolResponse(BaseModel):
     command: str
@@ -68,7 +81,46 @@ class ArmGetJointStatusResponse(BaseModel):
     response: bool
     joint_status: Optional[PiperJointStatus]
 
+class WrappedPose:
+    timestamp: float
+    pose: list
 
+    def __init__(self, timestamp, pose):
+        self.timestamp = timestamp
+        self.pose = pose
+
+def plot_data_queue():
+    fig, ax = plt.subplots(2, 1, figsize=(10, 8))
+    x_data, y_data, z_data = [], [], []
+    rx_data, ry_data, rz_data = [], [], []
+
+    def update(frame):
+        if not MANAGER.data_queue.empty():
+            wrapped_pose = MANAGER.data_queue.get()
+            pose = wrapped_pose.pose
+            x_data.append(pose[0])
+            y_data.append(pose[1])
+            z_data.append(pose[2])
+            rx_data.append(pose[3])
+            ry_data.append(pose[4])
+            rz_data.append(pose[5])
+
+            ax[0].clear()
+            ax[0].plot(x_data, label='X')
+            ax[0].plot(y_data, label='Y')
+            ax[0].plot(z_data, label='Z')
+            ax[0].legend()
+            ax[0].set_title('Position')
+
+            ax[1].clear()
+            ax[1].plot(rx_data, label='Rx')
+            ax[1].plot(ry_data, label='Ry')
+            ax[1].plot(rz_data, label='Rz')
+            ax[1].legend()
+            ax[1].set_title('Orientation')
+
+    ani = FuncAnimation(fig, update, interval=100)
+    plt.show()
 
 class DexHandManager:
     arm_left: Union[PiperArm, None]
@@ -79,8 +131,13 @@ class DexHandManager:
 
     test_mode: bool = False
 
+    data_queue: queue.Queue
+
     def __init__(self, arm_type="piper", hand_type="inspire", test_mode=False):
         self.test_mode = test_mode
+        self.data_queue = queue.Queue(100)
+
+        # plot_data_queue()
 
         if not self.test_mode:
             if arm_type == "piper":
@@ -184,11 +241,45 @@ class DexHandManager:
                 assert len(request.joint_angles) == 6
                 self.arm_right.joint_ctrl(request.joint_angles)
                 return BoolResponse(command=request.command, response=True)
+    
+    def arm_set_end_effector_pose(self, request: ArmSetEndEffectorPoseRequest):
+        if self.test_mode:
+            if (request.arm_type == "piper"):
+                # assert the arm is a PiperArm
+                assert isinstance(self.arm_right, PiperArm)
+                assert len(request.pose) == 7
+
+                self.data_queue.put(WrappedPose(timestamp=time.time(), pose=request.pose))
+
+                print(f"Pose: {request.pose}, timestamp: {time.time()}")
+
+                # self.arm_right.pose_ctrl(request.pose)
+                return BoolResponse(command=request.command, response=True)
 
 
 
 
 MANAGER = DexHandManager(test_mode=True)
+# declare the Kalman Filter object
+KF: Union[KalmanFilter, None] = None
+
+def initialize_kalman_filter():
+    dt = 0.01  # Time step
+
+    # Initial state (example: starting at origin, no rotation, no velocity)
+    initial_state = [0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0]  # x, y, z, vx, vy, vz, qw, qx, qy, qz, wx, wy, wz
+
+    # Initial covariance
+    initial_covariance = np.diag([0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.01, 0.01, 0.01, 0.01, 0.1, 0.1, 0.1])
+
+    # Process noise (tune these values)
+    process_noise = np.diag([0.01, 0.01, 0.01, 0.1, 0.1, 0.1, 0.001, 0.001, 0.001, 0.001, 0.01, 0.01, 0.01])
+
+    # Measurement noise (tune these values)
+    measurement_noise = np.diag([0.05, 0.05, 0.05, 0.01, 0.01, 0.01, 0.01])
+
+    KF = KalmanFilter(initial_state, initial_covariance, process_noise, measurement_noise, dt)
+
 
 def start_tcp_server_sync():
     server_ip = "0.0.0.0"
@@ -244,6 +335,9 @@ def handle_message(message: str) -> BoolResponse:
     elif cmd == "arm_set_joint_angles":
         request = ArmSetJointAnglesRequest.model_validate_json(message)
         response = MANAGER.arm_set_joint_angles(request)
+    elif cmd == "arm_set_end_effector_pose":
+        request = ArmSetEndEffectorPoseRequest.model_validate_json(message)
+        response = MANAGER.arm_set_end_effector_pose(request)
     else:
         response = BoolResponse(command=cmd, response=False)
 
@@ -258,29 +352,19 @@ async def handle_client(reader: asyncio.StreamReader, writer: asyncio.StreamWrit
     
     try:
         while True:
-            try:
-                data = await asyncio.wait_for(reader.read(1024), timeout=100.0)
-            except asyncio.TimeoutError:
-                print(f"Connection timeout from {addr}")
-                break
-
+            data = await reader.read(1024)
             if not data:
+                logger.info(f"Client {addr} disconnected (received 0 bytes).")
                 break
-
-            raw_json = data.decode(encoding="utf-8")
-            print(f"Received: {raw_json}")
-            
-            # test_data = TestData.from_json(raw_json)
-            response = handle_message(raw_json)
-
-            writer.write(response.model_dump_json().encode(encoding="utf-8"))
+            logger.debug(f"Received from {addr}: {data.decode()}")
+            writer.write(data) #send back
             await writer.drain()
-    except asyncio.CancelledError:
-        pass
+    except Exception as e:
+        logger.exception(f"Error during communication: {e}")
     finally:
-        print(f"Disconnected by {addr}")
+        logger.info(f"Closing connection to {addr}.")
         writer.close()
-        await writer.wait_closed()
+        await writer.wait_closed()  # Ensure closure with asyncio
 
 
 def start_tcp_server(host='0.0.0.0', port=8765):
@@ -300,5 +384,15 @@ def start_tcp_server(host='0.0.0.0', port=8765):
         event_loop.close()
 
 
+
+
+
 if __name__ == "__main__":
     start_tcp_server()
+    # Start the TCP server in a separate thread
+    # import threading
+    # server_thread = threading.Thread(target=start_tcp_server)
+    # server_thread.start()
+
+    # Plot data from the queue
+    # plot_data_queue()
