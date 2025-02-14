@@ -1,0 +1,3 @@
+[submodule "api"]
+	path = api
+	url = https://github.com/haoyan-ts/ts_dexhand_api.git
