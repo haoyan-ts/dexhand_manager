@@ -21,9 +21,9 @@ regdict = {
 
 
 class InspireHand:
-    def __init__(self, port, baudrate):
-        self.ser = self.open_serial(port, baudrate)
-
+    def __init__(self):
+        pass
+    
     def open_serial(self, port, baudrate):
         ser = serial.Serial()
         ser.port = port

@@ -1,5 +1,6 @@
 from collections import deque
 from enum import IntEnum
+import logging.handlers
 from piper_sdk import *
 import time
 import math
@@ -9,6 +10,10 @@ import pydantic
 from pydantic import BaseModel, ConfigDict, TypeAdapter
 
 from mapping import Complex
+from logging import getLogger
+
+LOG = getLogger(__name__)
+
 
 
 class BaseArm:
@@ -145,8 +150,11 @@ class PiperArm(BaseArm):
             enable_list.append(piper.GetArmLowSpdInfoMsgs().motor_6.foc_status.driver_enable_status)
             enable_flag = all(enable_list)
 
+            LOG.debug(f"Enable flags: {enable_list}")
+
+
             piper.EnableArm(7)
-            piper.GripperCtrl(0, 1000, 0x00, 0)
+            # piper.GripperCtrl(0, 1000, 0x00, 0)
             
             print(f"使能状态: {enable_flag}")
             print(f"--------------------")
@@ -194,6 +202,8 @@ class PiperArm(BaseArm):
             enable_list.append(piper.GetArmLowSpdInfoMsgs().motor_6.foc_status.driver_enable_status)
 
             enable_flag = any(enable_list)
+
+            LOG.debug(f"Enable flags: {enable_list}")
 
             piper.DisableArm(7)
             piper.GripperCtrl(0, 1000, 0x02, 0)
@@ -274,11 +284,10 @@ class PiperArm(BaseArm):
 
         return joint_status
     
-    def get_arm_status(self):
+    def get_arm_status(self) -> ArmMsgStatus:
         raw_data = self.piper.GetArmStatus()
-        arm_status = PiperArmStatus.validate_from_raw(raw_data)
 
-        return arm_status
+        return raw_data.arm_status
 
 if __name__ == "__main__":
     arm = PiperArm()

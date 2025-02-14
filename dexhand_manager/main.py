@@ -23,63 +23,6 @@ from logging import getLogger
 
 logger = getLogger(__name__)
 
-class BaseRequest(BaseModel):
-    pass
-
-class TestData(BaseModel):
-    x: int
-    y: int
-    z: int
-
-class ArmEnableRequest(BaseModel):
-    command: str = "arm_enable"
-    arm_side: Literal["left", "right"]
-    arm_type: Literal["piper", "nova"]
-
-class ArmDisableRequest(BaseModel):
-    command: str = "arm_disable"
-    arm_side: Literal["left", "right"]
-    arm_type: Literal["piper", "nova"]
-
-class ArmGetArmStatusRequest(BaseModel):
-    command: str = "arm_get_arm_status"
-    arm_side: Literal["left", "right"]
-    arm_type: Literal["piper", "nova"]
-
-class ArmGetJointStatusRequest(BaseModel):
-    command: str = "arm_get_joint_status"
-    arm_side: Literal["left", "right"]
-    arm_type: Literal["piper", "nova"]
-
-class ArmSetJointAnglesRequest(BaseModel):
-    command: str = "arm_set_joint_angles"
-    arm_side: Literal["left", "right"]
-    arm_type: Literal["piper", "nova"]
-    joint_angles: list
-
-class ArmSetEndEffectorPoseRequest(BaseModel):
-    command: str = "arm_set_end_effector_pose"
-    arm_side: Literal["left", "right"]
-    arm_type: Literal["piper", "nova"]
-    pose: list
-
-class BoolResponse(BaseModel):
-    command: str
-    response: bool
-
-class ArmGetArmStatusResponse(BaseModel):
-    command: str = "arm_get_arm_status"
-    arm_side: Literal["left", "right"]
-    arm_type: Literal["piper", "nova"]
-    response: bool
-    arm_status: Optional[PiperArmStatus]
-
-class ArmGetJointStatusResponse(BaseModel):
-    command: str = "arm_get_joint_status"
-    arm_side: Literal["left", "right"]
-    arm_type: Literal["piper", "nova"]
-    response: bool
-    joint_status: Optional[PiperJointStatus]
 
 class WrappedPose:
     timestamp: float
