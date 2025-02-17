@@ -106,7 +106,6 @@ class PiperArm(BaseArm):
     mapping: Complex
 
     def __init__(self):
-        self.piper = C_PiperInterface()
         self.command_timestamps = deque(maxlen=10)
         self.mapping = Complex.CreateDefaultComplex()
 
@@ -125,6 +124,7 @@ class PiperArm(BaseArm):
 
     def connect(self):
         # self.record_timestamp()
+        self.piper = C_PiperInterface()
         self.piper.ConnectPort()
 
     def enable(self):
