@@ -9,7 +9,7 @@ buf generate
 if [ $? -eq 0 ]; then
     cd ..   
     # Copy gen/python/ts to workspace
-    cp -r api/gen/python/ts .
+    cp -r api/gen/python/ts dexhand_manager/
 else
     echo "buf build failed"
     exit 1

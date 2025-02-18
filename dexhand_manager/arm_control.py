@@ -15,7 +15,6 @@ from logging import getLogger
 LOG = getLogger(__name__)
 
 
-
 class BaseArm:
     def connect(self):
         pass
@@ -304,5 +303,3 @@ if __name__ == "__main__":
 
     # average_rate = arm.calculate_average_rate()
     # print(f"Average command sending rate: {average_rate} Hz")
-
-

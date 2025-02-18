@@ -13,6 +13,6 @@
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
             },
-        }
+        },
     ]
 }
