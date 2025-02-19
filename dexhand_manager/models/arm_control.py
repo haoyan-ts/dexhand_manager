@@ -1,16 +1,16 @@
+import logging.handlers
+import math
+import time
 from collections import deque
 from enum import IntEnum
-import logging.handlers
-from piper_sdk import *
-import time
-import math
-
-from scipy.spatial.transform import Rotation as R
-import pydantic
-from pydantic import BaseModel, ConfigDict, TypeAdapter
-
-from mapping import Complex
 from logging import getLogger
+
+import pydantic
+from piper_sdk import *
+from pydantic import BaseModel, ConfigDict, TypeAdapter
+from scipy.spatial.transform import Rotation as R
+
+from .mapping import LinearInterpModel
 
 LOG = getLogger(__name__)
 
@@ -42,6 +42,7 @@ class MotionCtrl2CtrlMode(IntEnum):
     TEACHING_LINKAGE = 0x06
     OFFLINE_TRAJECTORY = 0x07
 
+
 class PiperJointStatus(BaseModel):
     joint_1: int
     joint_2: int
@@ -51,8 +52,10 @@ class PiperJointStatus(BaseModel):
     joint_6: int
 
     def __str__(self):
-        return f"joint_1: {self.joint_1}, joint_2: {self.joint_2}, joint_3: {self.joint_3}, " \
-               f"joint_4: {self.joint_4}, joint_5: {self.joint_5}, joint_6: {self.joint_6}"
+        return (
+            f"joint_1: {self.joint_1}, joint_2: {self.joint_2}, joint_3: {self.joint_3}, "
+            f"joint_4: {self.joint_4}, joint_5: {self.joint_5}, joint_6: {self.joint_6}"
+        )
 
     @staticmethod
     def validate_from_raw(raw_data: C_PiperInterface.ArmJoint):
@@ -63,10 +66,11 @@ class PiperJointStatus(BaseModel):
             "joint_3": raw_data.joint_state.joint_3,
             "joint_4": raw_data.joint_state.joint_4,
             "joint_5": raw_data.joint_state.joint_5,
-            "joint_6": raw_data.joint_state.joint_6
+            "joint_6": raw_data.joint_state.joint_6,
         }
 
         return PiperJointStatus(**data)
+
 
 class PiperArmStatus(BaseModel):
     ctrl_mode: int
@@ -78,9 +82,11 @@ class PiperArmStatus(BaseModel):
     err_code: int
 
     def __str__(self):
-        return f"ctrl_mode: {self.ctrl_mode}, arm_status: {self.arm_status}, mode_feed: {self.mode_feed}, " \
-               f"teach_status: {self.teach_status}, motion_status: {self.motion_status}, " \
-               f"trajectory_num: {self.trajectory_num}, err_code: {self.err_code}"
+        return (
+            f"ctrl_mode: {self.ctrl_mode}, arm_status: {self.arm_status}, mode_feed: {self.mode_feed}, "
+            f"teach_status: {self.teach_status}, motion_status: {self.motion_status}, "
+            f"trajectory_num: {self.trajectory_num}, err_code: {self.err_code}"
+        )
 
     @staticmethod
     def validate_from_raw(raw_data: C_PiperInterface.ArmStatus):
@@ -93,20 +99,21 @@ class PiperArmStatus(BaseModel):
             "motion_status": raw_data.arm_status.motion_status,
             "trajectory_num": raw_data.arm_status.trajectory_num,
             "err_code": raw_data.arm_status.err_code,
-            "err_status": raw_data.arm_status.err_status
+            "err_status": raw_data.arm_status.err_status,
         }
 
         return PiperArmStatus(**data)
+
 
 class PiperArm(BaseArm):
     piper: C_PiperInterface
     speed_ratio: int = 30
     command_timestamps: deque
-    mapping: Complex
+    mapping: LinearInterpModel
 
     def __init__(self):
         self.command_timestamps = deque(maxlen=10)
-        self.mapping = Complex.CreateDefaultComplex()
+        self.mapping = LinearInterpModel.CreateDefaultComplex()
 
     def record_timestamp(self):
         self.command_timestamps.append(time.time())
@@ -118,13 +125,16 @@ class PiperArm(BaseArm):
         intervals = [t - s for s, t in zip(stamps, stamps[1:])]
 
         average_interval = sum(intervals) / len(intervals)
-        
+
         return 1 / average_interval if average_interval > 0 else 0
 
     def connect(self):
         # self.record_timestamp()
         self.piper = C_PiperInterface()
         self.piper.ConnectPort()
+
+    def disconnect(self):
+        del self.piper
 
     def enable(self):
         # self.record_timestamp()
@@ -139,32 +149,43 @@ class PiperArm(BaseArm):
         while not (loop_flag):
             elapsed_time = time.time() - start_time
             print(f"--------------------")
-            
+
             enable_list = []
-            enable_list.append(piper.GetArmLowSpdInfoMsgs().motor_1.foc_status.driver_enable_status)
-            enable_list.append(piper.GetArmLowSpdInfoMsgs().motor_2.foc_status.driver_enable_status)
-            enable_list.append(piper.GetArmLowSpdInfoMsgs().motor_3.foc_status.driver_enable_status)
-            enable_list.append(piper.GetArmLowSpdInfoMsgs().motor_4.foc_status.driver_enable_status)
-            enable_list.append(piper.GetArmLowSpdInfoMsgs().motor_5.foc_status.driver_enable_status)
-            enable_list.append(piper.GetArmLowSpdInfoMsgs().motor_6.foc_status.driver_enable_status)
+            enable_list.append(
+                piper.GetArmLowSpdInfoMsgs().motor_1.foc_status.driver_enable_status
+            )
+            enable_list.append(
+                piper.GetArmLowSpdInfoMsgs().motor_2.foc_status.driver_enable_status
+            )
+            enable_list.append(
+                piper.GetArmLowSpdInfoMsgs().motor_3.foc_status.driver_enable_status
+            )
+            enable_list.append(
+                piper.GetArmLowSpdInfoMsgs().motor_4.foc_status.driver_enable_status
+            )
+            enable_list.append(
+                piper.GetArmLowSpdInfoMsgs().motor_5.foc_status.driver_enable_status
+            )
+            enable_list.append(
+                piper.GetArmLowSpdInfoMsgs().motor_6.foc_status.driver_enable_status
+            )
             enable_flag = all(enable_list)
 
             LOG.debug(f"Enable flags: {enable_list}")
 
-
             piper.EnableArm(7)
             # piper.GripperCtrl(0, 1000, 0x00, 0)
-            
+
             print(f"使能状态: {enable_flag}")
             print(f"--------------------")
-            
-            if(enable_flag == True):
+
+            if enable_flag == True:
                 loop_flag = True
                 enable_flag = True
-            else: 
+            else:
                 loop_flag = False
                 enable_flag = False
-            
+
             if elapsed_time > timeout:
                 print(f"超时....")
                 elapsed_time_flag = True
@@ -177,7 +198,7 @@ class PiperArm(BaseArm):
         print(f"Returning response: {resp}")
 
         return resp
-    
+
     def disable(self):
         # self.record_timestamp()
         piper = self.piper
@@ -191,14 +212,26 @@ class PiperArm(BaseArm):
         while not (loop_flag):
             elapsed_time = time.time() - start_time
             print(f"--------------------")
-            
+
             enable_list = []
-            enable_list.append(piper.GetArmLowSpdInfoMsgs().motor_1.foc_status.driver_enable_status)
-            enable_list.append(piper.GetArmLowSpdInfoMsgs().motor_2.foc_status.driver_enable_status)
-            enable_list.append(piper.GetArmLowSpdInfoMsgs().motor_3.foc_status.driver_enable_status)
-            enable_list.append(piper.GetArmLowSpdInfoMsgs().motor_4.foc_status.driver_enable_status)
-            enable_list.append(piper.GetArmLowSpdInfoMsgs().motor_5.foc_status.driver_enable_status)
-            enable_list.append(piper.GetArmLowSpdInfoMsgs().motor_6.foc_status.driver_enable_status)
+            enable_list.append(
+                piper.GetArmLowSpdInfoMsgs().motor_1.foc_status.driver_enable_status
+            )
+            enable_list.append(
+                piper.GetArmLowSpdInfoMsgs().motor_2.foc_status.driver_enable_status
+            )
+            enable_list.append(
+                piper.GetArmLowSpdInfoMsgs().motor_3.foc_status.driver_enable_status
+            )
+            enable_list.append(
+                piper.GetArmLowSpdInfoMsgs().motor_4.foc_status.driver_enable_status
+            )
+            enable_list.append(
+                piper.GetArmLowSpdInfoMsgs().motor_5.foc_status.driver_enable_status
+            )
+            enable_list.append(
+                piper.GetArmLowSpdInfoMsgs().motor_6.foc_status.driver_enable_status
+            )
 
             enable_flag = any(enable_list)
 
@@ -206,17 +239,17 @@ class PiperArm(BaseArm):
 
             piper.DisableArm(7)
             piper.GripperCtrl(0, 1000, 0x02, 0)
-            
+
             print(f"使能状态: {enable_flag}")
             print(f"--------------------")
-            
-            if(enable_flag == False):
+
+            if enable_flag == False:
                 loop_flag = True
                 enable_flag = False
-            else: 
+            else:
                 loop_flag = False
                 enable_flag = True
-            
+
             if elapsed_time > timeout:
                 print(f"超时....")
                 elapsed_time_flag = True
@@ -229,11 +262,10 @@ class PiperArm(BaseArm):
         print(f"Returning response: {resp}")
 
         return resp
-    
+
     def calibrate(self, vertex_targets: list[list[float]]):
         self.mapping.set_targets(vertex_targets)
-        
-    
+
     def joint_ctrl(self, joints):
         self.record_timestamp()
         piper = self.piper
@@ -241,12 +273,12 @@ class PiperArm(BaseArm):
         # degree to radian
         factor = 1000
 
-        joint_0 = round(joints[0]*factor)
-        joint_1 = round(joints[1]*factor)
-        joint_2 = round(joints[2]*factor)
-        joint_3 = round(joints[3]*factor)
-        joint_4 = round(joints[4]*factor)
-        joint_5 = round(joints[5]*factor)
+        joint_0 = round(joints[0] * factor)
+        joint_1 = round(joints[1] * factor)
+        joint_2 = round(joints[2] * factor)
+        joint_3 = round(joints[3] * factor)
+        joint_4 = round(joints[4] * factor)
+        joint_5 = round(joints[5] * factor)
 
         # joint_6 = round(position[6] * 1000 * 1000)
 
@@ -276,17 +308,17 @@ class PiperArm(BaseArm):
         # r = R.from_euler('xyz', orientation, degrees=False)
         # quaternion = r.as_quat()
 
-
     def get_joint_status(self):
         raw_data = self.piper.GetArmJointMsgs()
         joint_status = PiperJointStatus.validate_from_raw(raw_data)
 
         return joint_status
-    
+
     def get_arm_status(self) -> ArmMsgStatus:
         raw_data = self.piper.GetArmStatus()
 
         return raw_data.arm_status
+
 
 if __name__ == "__main__":
     arm = PiperArm()

@@ -3,27 +3,29 @@ import time
 import asyncio
 
 regdict = {
-    'ID' : 1000,
-    'baudrate' : 1001,
-    'clearErr' : 1004,
-    'forceClb' : 1009,
-    'angleSet' : 1486,
-    'forceSet' : 1498,
-    'speedSet' : 1522,
-    'angleAct' : 1546,
-    'forceAct' : 1582,
-    'errCode' : 1606,
-    'statusCode' : 1612,
-    'temp' : 1618,
-    'actionSeq' : 2320,
-    'actionRun' : 2322
+    "ID": 1000,
+    "baudrate": 1001,
+    "clearErr": 1004,
+    "forceClb": 1009,
+    "angleSet": 1486,
+    "forceSet": 1498,
+    "speedSet": 1522,
+    "angleAct": 1546,
+    "forceAct": 1582,
+    "errCode": 1606,
+    "statusCode": 1612,
+    "temp": 1618,
+    "actionSeq": 2320,
+    "actionRun": 2322,
 }
 
 
 class InspireHand:
+    ser: serial.Serial
+
     def __init__(self):
         pass
-    
+
     def open_serial(self, port, baudrate):
         ser = serial.Serial()
         ser.port = port
@@ -45,7 +47,7 @@ class InspireHand:
             checksum += bytes[i]
         checksum &= 0xFF
         bytes.append(checksum)
-        self.ser.write(bytes)
+        self.ser.write(bytearray(bytes))
 
         time.sleep(0.01)
 
@@ -64,13 +66,13 @@ class InspireHand:
             checksum += bytes[i]
         checksum &= 0xFF
         bytes.append(checksum)
-        self.ser.write(bytes)
+        self.ser.write(bytearray(bytes))
 
         time.sleep(0.01)
 
         recv = self.ser.read_all()
 
-        if len(recv) == 0:
+        if recv is None or len(recv) == 0:
             return []
         num = (recv[3] & 0xFF) - 3
         val = []
@@ -78,9 +80,9 @@ class InspireHand:
             val.append(recv[7 + i])
 
         if verbose:
-            print('读到的寄存器值依次为：', end='')
+            print("读到的寄存器值依次为：", end="")
             for i in range(num):
-                print(val[i], end=' ')
+                print(val[i], end=" ")
             print()
 
         return val
@@ -102,32 +104,32 @@ class InspireHand:
         len = 6
         # str == 'errCode' or str == 'statusCode' or str == 'temp':
         val_act = self.read_register(id, regdict[str], len, True)
-        if len(val_act) < len:
-            print('没有读到数据')
+        if val_act is None or len(val_act) < len:
+            print("没有读到数据")
             return
-        print('读到的值依次为：', end='')
+        print("读到的值依次为：", end="")
         for i in range(len):
-            print(val_act[i], end=' ')
+            print(val_act[i], end=" ")
         print()
 
     def read12(self, id, str):
         if str not in regdict:
             print(f"Incorrect command.")
             return
-        
+
         len = 12
         # if str == 'angleSet' or str == 'forceSet' or str == 'speedSet' or str == 'angleAct' or str == 'forceAct':
         val = self.read_register(id, regdict[str], len, True)
         if len(val) < len:
-            print('没有读到数据')
+            print("没有读到数据")
             return
         val_act = []
         for i in range(len / 2):
-            val_act.append((val[2*i] & 0xFF) + (val[1 + 2*i] << 8))
-        print('读到的值依次为：', end='')
+            val_act.append((val[2 * i] & 0xFF) + (val[1 + 2 * i] << 8))
+        print("读到的值依次为：", end="")
 
         for i in range(len / 2):
-            print(val_act[i], end=' ')
+            print(val_act[i], end=" ")
         print()
 
     def set_angle(self, hand_id, angles):
@@ -136,7 +138,7 @@ class InspireHand:
             val_reg.append(angle & 0xFF)
             val_reg.append((angle >> 8) & 0xFF)
 
-        self.write_register(hand_id, regdict['angleSet'], 12, val_reg)
+        self.write_register(hand_id, regdict["angleSet"], 12, val_reg)
 
     def set_pos(self, hand_id, positions):
         val_reg = []
@@ -144,7 +146,7 @@ class InspireHand:
             val_reg.append(pos & 0xFF)
             val_reg.append((pos >> 8) & 0xFF)
 
-        self.write_register(hand_id, regdict['angleSet'], 12, val_reg)
+        self.write_register(hand_id, regdict["angleSet"], 12, val_reg)
 
     def set_speed(self, hand_id, speeds):
         val_reg = []
@@ -152,7 +154,7 @@ class InspireHand:
             val_reg.append(speed & 0xFF)
             val_reg.append((speed >> 8) & 0xFF)
 
-        self.write_register(hand_id, regdict['speedSet'], 12, val_reg)
+        self.write_register(hand_id, regdict["speedSet"], 12, val_reg)
 
     def set_force(self, hand_id, forces):
         val_reg = []
@@ -160,7 +162,7 @@ class InspireHand:
             val_reg.append(force & 0xFF)
             val_reg.append((force >> 8) & 0xFF)
 
-        self.write_register(hand_id, regdict['forceSet'], 12, val_reg)
+        self.write_register(hand_id, regdict["forceSet"], 12, val_reg)
 
     # def set_wristangle(self, hand_id, yaw, pitch):
     #     val_reg = [
@@ -170,40 +172,39 @@ class InspireHand:
 
     #     self.write_register(hand_id, regdict['angleSet'], 4, val_reg)
 
-
     # def getwristangleact(self, hand_id):
-        # return self.read6(hand_id, 'angleAct')
+    # return self.read6(hand_id, 'angleAct')
 
     def getangleact(self, hand_id):
-        return self.read12(hand_id, 'angleAct')
+        return self.read12(hand_id, "angleAct")
 
     def getangleset(self, hand_id):
-        return self.read12(hand_id, 'angleSet')
+        return self.read12(hand_id, "angleSet")
 
     def getposact(self, hand_id):
-        return self.read12(hand_id, 'angleAct')
+        return self.read12(hand_id, "angleAct")
 
     def getposset(self, hand_id):
-        return self.read12(hand_id, 'angleSet')
-    
+        return self.read12(hand_id, "angleSet")
+
     def getspeedset(self, hand_id):
-        return self.read12(hand_id, 'speedSet')
+        return self.read12(hand_id, "speedSet")
 
     def getforceact(self, hand_id):
-        return self.read12(hand_id, 'forceAct')
+        return self.read12(hand_id, "forceAct")
 
     def getforceset(self, hand_id):
-        return self.read12(hand_id, 'forceSet')
-    
+        return self.read12(hand_id, "forceSet")
+
     def getcurrentact(self, hand_id):
-        return self.read6(hand_id, 'angleAct')
-    
+        return self.read6(hand_id, "angleAct")
+
     def geterror(self, hand_id):
-        return self.read6(hand_id, 'errCode')
-    
+        return self.read6(hand_id, "errCode")
+
     def gettemp(self, hand_id):
-        return self.read6(hand_id, 'temp')
-    
+        return self.read6(hand_id, "temp")
+
     # def getwristangleset(self, hand_id):
     #     return self.read6(hand_id, 'angleSet')
 
@@ -213,45 +214,43 @@ class InspireHand:
     # def getwristposset(self, hand_id):
     #     return self.read6(hand_id, 'angleSet')
 
-
-
     # def getwristcurrentact(self, hand_id):
     #     return self.read6(hand_id, 'angleAct')
 
-
     # def getwristerror(self, hand_id):
     #     return self.read6(hand_id, 'errCode')
-
 
     # def getwristtemp(self, hand_id):
     #     return self.read6(hand_id, 'temp')
 
 
-if __name__ == '__main__':
-    print('打开串口！')
-    hand_api = InspireHand('/dev/ttyACM0', 115200)  # 改成自己的串口号和波特率，波特率默认115200
-    print('设置灵巧手运动速度参数，-1为不设置该运动速度！')
+if __name__ == "__main__":
+    print("打开串口！")
+    hand_api = InspireHand(
+        "/dev/ttyACM0", 115200
+    )  # 改成自己的串口号和波特率，波特率默认115200
+    print("设置灵巧手运动速度参数，-1为不设置该运动速度！")
     hand_api.set_speed(1, [100, 100, 100, 100, 100, 100])
     time.sleep(2)
-    print('设置灵巧手抓握力度参数！')
+    print("设置灵巧手抓握力度参数！")
     hand_api.set_force(1, [500, 500, 500, 500, 500, 500])
     time.sleep(1)
-    print('设置灵巧手运动角度参数0，-1为不设置该运动角度！')
+    print("设置灵巧手运动角度参数0，-1为不设置该运动角度！")
     hand_api.set_angle(1, [0, 0, 0, 0, 400, -1])
     time.sleep(3)
     hand_api.getangleact(1)
     time.sleep(1)
-    print('设置灵巧手运动角度参数1000，-1为不设置该运动角度！')
+    print("设置灵巧手运动角度参数1000，-1为不设置该运动角度！")
     hand_api.set_angle(1, [1000, 1000, 1000, 1000, 400, -1])
     time.sleep(3)
     hand_api.getangleact(1)
     time.sleep(1)
     hand_api.geterror(1)
     time.sleep(1)
-    print('设置灵巧手动作库序列：8！')
-    hand_api.write_register(1, regdict['actionSeq'], 1, [8])
+    print("设置灵巧手动作库序列：8！")
+    hand_api.write_register(1, regdict["actionSeq"], 1, [8])
     time.sleep(1)
-    print('运行灵巧手当前序列动作！')
-    hand_api.write_register(1, regdict['actionRun'], 1, [1])
+    print("运行灵巧手当前序列动作！")
+    hand_api.write_register(1, regdict["actionRun"], 1, [1])
     # hand_api.write_register(1, regdict['forceClb'], 1, [1])
     # time.sleep(10) # 由于力校准时间较长，请不要漏过这个sleep并尝试重新与手通讯，可能导致插件崩溃

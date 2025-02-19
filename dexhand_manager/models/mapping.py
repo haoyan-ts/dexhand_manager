@@ -1,5 +1,5 @@
-
 from typing import Union
+
 import numpy as np
 
 
@@ -22,14 +22,14 @@ class Vertex:
     def set_target(self, target):
         self.target = np.atleast_2d(target)
         self.has_target = True
-    
+
     def reset_target(self):
         self.has_target = False
         self.target = None
 
     def __str__(self):
         return f"({self.x}, {self.y}, {self.z})"
-    
+
 
 class Simplex:
     vertices: list[Vertex] = []
@@ -66,23 +66,26 @@ class Simplex:
 
         p = np.array([point[0], point[1], point[2], 1])
 
+        A = np.array(
+            [
+                [a[0], b[0], c[0], d[0]],
+                [a[1], b[1], c[1], d[1]],
+                [a[2], b[2], c[2], d[2]],
+                [1, 1, 1, 1],
+            ]
+        )
 
-        A = np.array([
-            [a[0], b[0], c[0], d[0]],
-            [a[1], b[1], c[1], d[1]],
-            [a[2], b[2], c[2], d[2]],
-            [1, 1, 1, 1]])
-        
         l = np.linalg.solve(A, p)
 
         return l
-    
+
     def hit_test(self, point: np.ndarray):
         l = self.to_barycentric(point)
         return all([0 <= l[i] <= 1 for i in range(4)])
 
 
-class Complex:
+class LinearInterpModel:
+    is_set: bool = False
     simplices: list[Simplex] = []
     vertices: list[Vertex] = []
     name = ""
@@ -105,35 +108,45 @@ class Complex:
             Simplex([vertices[0], vertices[2], vertices[5], vertices[1]]),
             Simplex([vertices[0], vertices[2], vertices[5], vertices[3]]),
             Simplex([vertices[0], vertices[5], vertices[7], vertices[4]]),
-
             Simplex([vertices[2], vertices[5], vertices[7], vertices[6]]),
             Simplex([vertices[0], vertices[2], vertices[5], vertices[7]]),
         ]
 
-        return Complex(vertices, simplices)
+        return LinearInterpModel().config(vertices, simplices)
 
-    def __init__(self, vertices, simplices):
+    def config(self, vertices, simplices):
         self.vertices = vertices
         self.simplices = simplices
+
+        return self
+
+    def _validate(self):
+        for simplex in self.simplices:
+            for vertex in simplex.vertices:
+                if not vertex.has_target:
+                    self.can_interpolate = False
+                    return
+
+        self.can_interpolate = True
 
     def hit_test(self, point: np.ndarray):
         for simplex in self.simplices:
             if simplex.hit_test(point):
                 return True
         return False
-    
+
     def interpolate(self, point: np.ndarray):
         if not self.can_interpolate:
             return None
-        
+
         for simplex in self.simplices:
             if simplex.hit_test(point):
                 return simplex.to_barycentric(point)
-            
+
         return None
-    
+
     def set_targets(self, targets: list[list[float]]):
         for v, tgt in zip(self.vertices, targets):
             v.set_target(tgt)
-        
+
         self.can_interpolate = True

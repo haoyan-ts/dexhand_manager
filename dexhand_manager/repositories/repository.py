@@ -1,58 +1,48 @@
 import logging
+import threading
+from typing import Optional
 
 import grpc
-
-from entities.dexhand_entity import DexHandEntity
+from entities import DexHand, Session
+from ts.dexhand.v1.common_pb2 import ArmType, HandType, Side
 from ts.dexhand.v1.dexhand_service_pb2 import DexHandConfig
-from ts.dexhand.v1.common_pb2 import Side
-
+from .error import RepositoryError, RepositoryAlreadyExistsError
 
 LOG = logging.getLogger(__name__)
 
 
 class LocalRepository:
-    session = None
-    dex_hands: dict[Side, DexHandEntity] = {}
+    _lock = threading.RLock()
 
-    def validate_create_dex_hand_request(
-        # self, request: dexhand_srv_pb2.CreateDexHandRequest
-    ):
-        # tester = self.dex_hands.get(request.config.side, None)
+    _session: Optional[Session] = None
 
-        # return True if tester is None else False
-        pass
+    def create_session(self):
+        with self._lock:
+            if self._session is None:
+                self._session = Session.create()
 
-    def create_dex_hand_from_config(self, config: DexHandConfig):
-        dex_hand = DexHandEntity()
-        dex_hand.create(config)
+                return self._session
+            else:
+                raise RepositoryAlreadyExistsError("Session already exists.")
 
-        self.dex_hands[dex_hand.side] = dex_hand
+    def get_session(self) -> Session:
+        with self._lock:
+            if self._session is None:
+                raise RepositoryError("Session does not exist.")
+            else:
+                return self._session
 
-        return dex_hand
+    def update_session(self, **kwargs):
+        with self._lock:
+            if self._session is None:
+                raise RepositoryError("Session does not exist.")
+            else:
+                self._session.merge_from_dict(**kwargs)
+                return self._session
 
-    def get_dex_hand_by_id(self, id: str):
-        for dex_hand in self.dex_hands.values():
-            if dex_hand.id == id:
-                return dex_hand
-        return None
-
-    def get_dex_hand_by_name(self, name: str):
-        for dex_hand in self.dex_hands.values():
-            if dex_hand.name == name:
-                return dex_hand
-        return None
-
-    def get_dex_hand_by_side(self, side: Side):
-        return self.dex_hands.get(side, None)
-
-    # def update_dex_hand(self, request: dexhand_srv_pb2.UpdateDexHandRequest):
-    #     dex_hand = self.get_dex_hand_by_id(request.dex_hand.id)
-    #     LOG.debug(f"Received a update mask. {request.update_mask}")
-
-    #     if dex_hand is None:
-    #         raise grpc.RpcError(
-    #             grpc.StatusCode.NOT_FOUND, f"Invalid DexHand ID: {request.dex_hand.id}"
-    #         )
-    #     else:
-    #         dex_hand.update(request.dex_hand)
-    #         return dex_hand
+    def delete_session(self):
+        with self._lock:
+            if self._session is None:
+                raise RepositoryError("Session does not exist.")
+            else:
+                del self._session
