@@ -19,9 +19,9 @@ from ts.dexhand.v1.dexhand_control_service_pb2_grpc import (
 LOG = getLogger(__name__)
 
 
-def serve():
+async def serve():
     LOG.info("Starting DexHand Manager")
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+    server = grpc.aio.server(futures.ThreadPoolExecutor(max_workers=10))
     # repository = LocalRepository()
     dex_hands_store = {}
 
@@ -33,5 +33,5 @@ def serve():
 
     server.add_insecure_port("[::]:50051")  # Use [::] for IPv6 and IPv4
     LOG.info("Server started on port 50051")
-    server.start()
-    server.wait_for_termination()
+    await server.start()
+    await server.wait_for_termination()

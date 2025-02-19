@@ -1,3 +1,4 @@
+import asyncio
 import json
 import sys
 from os import path
@@ -12,4 +13,4 @@ if __name__ == "__main__":
         config.dictConfig(json.load(f))
 
     LOG.info(f"Starting DexHand Manager")
-    serve()
+    asyncio.run(serve())
