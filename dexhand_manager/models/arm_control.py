@@ -6,7 +6,7 @@ from enum import IntEnum
 from logging import getLogger
 
 import pydantic
-from piper_sdk import *
+import piper_sdk
 from pydantic import BaseModel, ConfigDict, TypeAdapter
 from scipy.spatial.transform import Rotation as R
 
@@ -58,7 +58,7 @@ class PiperJointStatus(BaseModel):
         )
 
     @staticmethod
-    def validate_from_raw(raw_data: C_PiperInterface.ArmJoint):
+    def validate_from_raw(raw_data: piper_sdk.C_PiperInterface.ArmJoint):
         data = {
             "timestamp": raw_data.time_stamp,
             "joint_1": raw_data.joint_state.joint_1,
@@ -89,7 +89,7 @@ class PiperArmStatus(BaseModel):
         )
 
     @staticmethod
-    def validate_from_raw(raw_data: C_PiperInterface.ArmStatus):
+    def validate_from_raw(raw_data: piper_sdk.C_PiperInterface.ArmStatus):
         data = {
             "timestamp": raw_data.time_stamp,
             "ctrl_mode": raw_data.arm_status.ctrl_mode,
@@ -109,7 +109,7 @@ class PiperArm(BaseArm):
     _is_connected = False
     _is_enabled = False
 
-    piper: C_PiperInterface
+    piper: piper_sdk.C_PiperInterface
     speed_ratio: int = 30
     command_timestamps: deque
     mapping: LinearInterpModel
@@ -133,7 +133,7 @@ class PiperArm(BaseArm):
 
     def connect(self):
         # self.record_timestamp()
-        self.piper = C_PiperInterface()
+        self.piper = piper_sdk.C_PiperInterface()
         self.piper.ConnectPort()
 
         self._is_connected = True
@@ -333,7 +333,7 @@ class PiperArm(BaseArm):
 
         return joint_status
 
-    def get_arm_status(self) -> ArmMsgStatus:
+    def get_arm_status(self) -> piper_sdk.ArmMsgStatus:
         raw_data = self.piper.GetArmStatus()
 
         return raw_data.arm_status
