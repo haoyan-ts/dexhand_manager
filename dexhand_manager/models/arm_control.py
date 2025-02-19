@@ -106,6 +106,9 @@ class PiperArmStatus(BaseModel):
 
 
 class PiperArm(BaseArm):
+    _is_connected = False
+    _is_enabled = False
+
     piper: C_PiperInterface
     speed_ratio: int = 30
     command_timestamps: deque
@@ -133,8 +136,12 @@ class PiperArm(BaseArm):
         self.piper = C_PiperInterface()
         self.piper.ConnectPort()
 
+        self._is_connected = True
+
     def disconnect(self):
         del self.piper
+
+        self._is_connected = False
 
     def enable(self):
         # self.record_timestamp()
@@ -197,6 +204,7 @@ class PiperArm(BaseArm):
         resp = enable_flag
         print(f"Returning response: {resp}")
 
+        self._is_enabled = True
         return resp
 
     def disable(self):
@@ -261,10 +269,21 @@ class PiperArm(BaseArm):
         resp = enable_flag
         print(f"Returning response: {resp}")
 
+        self._is_enabled = False
+
         return resp
 
     def calibrate(self, vertex_targets: list[list[float]]):
         self.mapping.set_targets(vertex_targets)
+
+    def move_j(self, joints: list[float]):
+        if not (self._is_enabled and self._is_connected):
+            raise ValueError("Arm is not enabled or connected.")
+
+        if len(joints) != 6:
+            raise ValueError("Invalid joint values.")
+
+        self.joint_ctrl(joints)
 
     def joint_ctrl(self, joints):
         self.record_timestamp()
@@ -287,7 +306,7 @@ class PiperArm(BaseArm):
         # piper.GripperCtrl(abs(joint_6), 1000, 0x01, 0)
         piper.MotionCtrl_2(0x01, 0x01, self.speed_ratio, 0x00)
 
-        print(f"freq: {self.calculate_average_rate()} Hz")
+        # print(f"freq: {self.calculate_average_rate()} Hz")
 
     def pose_ctrl(self, pose):
         self.record_timestamp()
