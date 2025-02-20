@@ -12,11 +12,15 @@ from models.inspire_hand import InspireHand
 from repositories.repository import LocalRepository
 from ts.dexhand.v1.common_pb2 import ArmType, HandType, Side
 from ts.dexhand.v1.dexhand_control_service_pb2 import (
+    ChangeControlModeRequest,
     ConnectDexHandRequest,
     DisableDexHandRequest,
     EnableDexHandRequest,
+    ModelType,
     ReceiveStatusRequest,
+    ReceiveStatusResponse,
     SendPoseRequest,
+    SetupModelRequest,
 )
 from ts.dexhand.v1.dexhand_control_service_pb2_grpc import DexHandControlServiceServicer
 from ts.dexhand.v1.dexhand_service_pb2 import CreateDexHandRequest, DeleteDexHandRequest
@@ -89,6 +93,44 @@ class DexHandControlService(DexHandControlServiceServicer):
 
     def __init__(self, dex_hands: dict[str, DexHandController]):
         self.dex_hands = dex_hands
+
+    def ChangeControlMode(
+        self, request: ChangeControlModeRequest, context: ServicerContext
+    ):
+        LOG.info("ChangeControlMode request received.")
+
+        # Validate if DexHand exists
+        dex_hand = self.dex_hands.get(request.dexhand_id, None)
+
+        if dex_hand is None:
+            context.set_code(StatusCode.NOT_FOUND)
+            context.set_details(f"Invalid DexHand ID: {request.dexhand_id}")
+        else:
+            # change control mode
+            dex_hand.change_ctrl_mode(request.control_mode)
+            return Empty()
+
+    def SetupModel(self, request: SetupModelRequest, context: ServicerContext):
+        LOG.info("SetupModel request received.")
+
+        # Validate if DexHand exists
+        dex_hand = self.dex_hands.get(request.dexhand_id, None)
+
+        if dex_hand is None:
+            context.set_code(StatusCode.NOT_FOUND)
+            context.set_details(f"Invalid DexHand ID: {request.dexhand_id}")
+        else:
+            # setup model
+            if request.model_type == ModelType.MODEL_TYPE_IK:
+                raise NotImplementedError("IK model is not implemented yet.")
+            elif request.model_type == ModelType.MODEL_TYPE_LERP:
+                dex_hand.setup_model(
+                    request.model_type,
+                    [list(data.angles) for data in request.lerp_model.data],
+                )
+                return Empty()
+            else:
+                raise ValueError(f"Invalid model type: {request.model_type}")
 
     def ConnectDexHand(self, request: ConnectDexHandRequest, context: ServicerContext):
         LOG.info("ConnectDexHand request received.")
@@ -246,8 +288,14 @@ class DexHandControlService(DexHandControlServiceServicer):
         try:
             while not cancel_task.done():
                 # Get and yield status every second.
-                status = dex_hand.get_status()  # assumes async get_status()
-                yield Empty()
+                raw_status = dex_hand.get_status()  # assumes async get_status()
+                response = ReceiveStatusResponse()
+                response.status.id = dex_hand.id
+                response.status.name = dex_hand.name
+                response.status.data.Pack(raw_status["arm_status"])
+                response.status.angles.extend(raw_status["joint_states"])
+
+                yield response
                 await asyncio.sleep(1)
         except asyncio.CancelledError:
             pass

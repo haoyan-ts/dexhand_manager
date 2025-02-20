@@ -10,113 +10,33 @@ import piper_sdk
 from pydantic import BaseModel, ConfigDict, TypeAdapter
 from scipy.spatial.transform import Rotation as R
 
+
+from ts.dexhand.v1.common_pb2 import Side
+from ts.dexhand.v1.piper_pb2 import (
+    ArmMsgStatus as PiperArmStatusProto,
+    ArmStatus,
+    ControlMode,
+    ErrorStatus,
+    ModeFeedback,
+    MotionStatus,
+    TeachStatus,
+)
+
 from .mapping import LinearInterpModel
 
 LOG = getLogger(__name__)
 
 
-class BaseArm:
-    def connect(self):
-        pass
-
-    def enable(self):
-        pass
-
-    def disable(self):
-        pass
-
-    def joint_ctrl(self, joints):
-        pass
-
-    def get_latest_status(self):
-        pass
-
-
-class MotionCtrl2CtrlMode(IntEnum):
-    IDLE = 0x00
-    CAN = 0x01
-    TEACHING = 0x02
-    ETHERNET = 0x03
-    WIFI = 0x04
-    REMOTE = 0x05
-    TEACHING_LINKAGE = 0x06
-    OFFLINE_TRAJECTORY = 0x07
-
-
-class PiperJointStatus(BaseModel):
-    joint_1: int
-    joint_2: int
-    joint_3: int
-    joint_4: int
-    joint_5: int
-    joint_6: int
-
-    def __str__(self):
-        return (
-            f"joint_1: {self.joint_1}, joint_2: {self.joint_2}, joint_3: {self.joint_3}, "
-            f"joint_4: {self.joint_4}, joint_5: {self.joint_5}, joint_6: {self.joint_6}"
-        )
-
-    @staticmethod
-    def validate_from_raw(raw_data: piper_sdk.C_PiperInterface.ArmJoint):
-        data = {
-            "timestamp": raw_data.time_stamp,
-            "joint_1": raw_data.joint_state.joint_1,
-            "joint_2": raw_data.joint_state.joint_2,
-            "joint_3": raw_data.joint_state.joint_3,
-            "joint_4": raw_data.joint_state.joint_4,
-            "joint_5": raw_data.joint_state.joint_5,
-            "joint_6": raw_data.joint_state.joint_6,
-        }
-
-        return PiperJointStatus(**data)
-
-
-class PiperArmStatus(BaseModel):
-    ctrl_mode: int
-    arm_status: int
-    mode_feed: int
-    teach_status: int
-    motion_status: int
-    trajectory_num: int
-    err_code: int
-
-    def __str__(self):
-        return (
-            f"ctrl_mode: {self.ctrl_mode}, arm_status: {self.arm_status}, mode_feed: {self.mode_feed}, "
-            f"teach_status: {self.teach_status}, motion_status: {self.motion_status}, "
-            f"trajectory_num: {self.trajectory_num}, err_code: {self.err_code}"
-        )
-
-    @staticmethod
-    def validate_from_raw(raw_data: piper_sdk.C_PiperInterface.ArmStatus):
-        data = {
-            "timestamp": raw_data.time_stamp,
-            "ctrl_mode": raw_data.arm_status.ctrl_mode,
-            "arm_status": raw_data.arm_status.arm_status,
-            "mode_feed": raw_data.arm_status.mode_feed,
-            "teach_status": raw_data.arm_status.teach_status,
-            "motion_status": raw_data.arm_status.motion_status,
-            "trajectory_num": raw_data.arm_status.trajectory_num,
-            "err_code": raw_data.arm_status.err_code,
-            "err_status": raw_data.arm_status.err_status,
-        }
-
-        return PiperArmStatus(**data)
-
-
-class PiperArm(BaseArm):
+class PiperArm:
     _is_connected = False
     _is_enabled = False
 
     piper: piper_sdk.C_PiperInterface
     speed_ratio: int = 30
     command_timestamps: deque
-    mapping: LinearInterpModel
 
     def __init__(self):
         self.command_timestamps = deque(maxlen=10)
-        self.mapping = LinearInterpModel.CreateDefaultComplex()
 
     def record_timestamp(self):
         self.command_timestamps.append(time.time())
@@ -273,8 +193,8 @@ class PiperArm(BaseArm):
 
         return resp
 
-    def calibrate(self, vertex_targets: list[list[float]]):
-        self.mapping.set_targets(vertex_targets)
+    def change_ctrl_mode(self, mode: int):
+        self.piper.MotionCtrl_1(0x00, 0x00, mode)
 
     def move_j(self, joints: list[float]):
         if not (self._is_enabled and self._is_connected):
@@ -327,16 +247,75 @@ class PiperArm(BaseArm):
         # r = R.from_euler('xyz', orientation, degrees=False)
         # quaternion = r.as_quat()
 
-    def get_joint_status(self):
+    def get_joint_states(self):
         raw_data = self.piper.GetArmJointMsgs()
-        joint_status = PiperJointStatus.validate_from_raw(raw_data)
+
+        factor = 0.001
+        # Process the raw data to list(float)
+        joint_status = [
+            raw_data.joint_state.joint_1 * factor,
+            raw_data.joint_state.joint_2 * factor,
+            raw_data.joint_state.joint_3 * factor,
+            raw_data.joint_state.joint_4 * factor,
+            raw_data.joint_state.joint_5 * factor,
+            raw_data.joint_state.joint_6 * factor,
+        ]
 
         return joint_status
 
-    def get_arm_status(self) -> piper_sdk.ArmMsgStatus:
-        raw_data = self.piper.GetArmStatus()
+    def get_arm_status(self):
+        raw_data = self.piper.GetArmStatus().arm_status
 
-        return raw_data.arm_status
+        # Process the raw data (ArmMsgStatus) to PiperArmStatusProto
+        arm_status = PiperArmStatusProto(
+            ctrl_mode=ControlMode.Name(raw_data.ctrl_mode + 1),
+            arm_status=ArmStatus.Name(raw_data.arm_status + 1),
+            mode_feed=ModeFeedback.Name(raw_data.mode_feed + 1),
+            motion_status=MotionStatus.Name(raw_data.motion_status + 1),
+            teach_status=TeachStatus.Name(raw_data.teach_status + 1),
+            trajectory_num=raw_data.trajectory_num,
+            err_code=raw_data.err_code,
+            err_status=ErrorStatus(),
+        )
+
+        arm_status.err_status.communication_status_joint_1 = (
+            raw_data.err_status.communication_status_joint_1
+        )
+        arm_status.err_status.communication_status_joint_2 = (
+            raw_data.err_status.communication_status_joint_2
+        )
+        arm_status.err_status.communication_status_joint_3 = (
+            raw_data.err_status.communication_status_joint_3
+        )
+        arm_status.err_status.communication_status_joint_4 = (
+            raw_data.err_status.communication_status_joint_4
+        )
+        arm_status.err_status.communication_status_joint_5 = (
+            raw_data.err_status.communication_status_joint_5
+        )
+        arm_status.err_status.communication_status_joint_6 = (
+            raw_data.err_status.communication_status_joint_6
+        )
+        arm_status.err_status.joint_1_angle_limit = (
+            raw_data.err_status.joint_1_angle_limit
+        )
+        arm_status.err_status.joint_2_angle_limit = (
+            raw_data.err_status.joint_2_angle_limit
+        )
+        arm_status.err_status.joint_3_angle_limit = (
+            raw_data.err_status.joint_3_angle_limit
+        )
+        arm_status.err_status.joint_4_angle_limit = (
+            raw_data.err_status.joint_4_angle_limit
+        )
+        arm_status.err_status.joint_5_angle_limit = (
+            raw_data.err_status.joint_5_angle_limit
+        )
+        arm_status.err_status.joint_6_angle_limit = (
+            raw_data.err_status.joint_6_angle_limit
+        )
+
+        return arm_status
 
 
 if __name__ == "__main__":
@@ -344,9 +323,9 @@ if __name__ == "__main__":
 
     arm.connect()
 
-    status = arm.get_latest_status()
-    # print arm status
-    print(f"Arm Status: \n{status}")
+    # status = arm.get_latest_status()
+    # # print arm status
+    # print(f"Arm Status: \n{status}")
 
     arm.enable()
     time.sleep(10)
