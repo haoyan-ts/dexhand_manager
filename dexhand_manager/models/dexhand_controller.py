@@ -65,7 +65,9 @@ class DexHandController:
 
         if self._model_type == ModelType.MODEL_TYPE_LERP:
             self._lerp = LinearInterpModel()
-            self._lerp.set_targets(np.array(data))
+            targets = np.array(data)
+            LOG.info(f"Setting targets: {targets.shape}")
+            self._lerp.set_targets(targets)
         elif self._model_type == ModelType.MODEL_TYPE_IK:
             raise ValueError("IK model is not implemented yet.")
         else:
@@ -138,12 +140,14 @@ class DexHandController:
 
     def move_p(self, pose: list[float]):
         with self._lock:
-            if self._model_type:
-                self.move_p_ik(pose)
-            else:
+            if self._model_type == ModelType.MODEL_TYPE_IK:
+                self._move_p_ik(pose)
+            elif self._model_type == ModelType.MODEL_TYPE_LERP:
                 self._move_p_lerp(pose)
+            else:
+                raise ValueError(f"Invalid model type: {self._model_type}")
 
-    def move_p_ik(self, pose: list[float]):
+    def _move_p_ik(self, pose: list[float]):
         with self._lock:
             self.__validate_instances()
 

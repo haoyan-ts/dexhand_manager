@@ -85,7 +85,7 @@ class LinearInterpModel:
         self.simplex_vertices = np.array(simplex_vertices)
 
     def set_targets(self, targets: np.ndarray):
-        if not (targets.shape[0] == 8 and targets.shape.count == 2):
+        if not (targets.shape[0] == 8):
             raise ValueError("Targets must be a 8xN array.")
 
         self.targets = targets

@@ -248,7 +248,7 @@ class DexHandControlService(DexHandControlServiceServicer):
                 if dex_hand is not None:
                     # send pose
                     LOG.info(f"Sending pose: {request.packet_request}")
-                    # dex_hand.move_pose(list(request.packet_request.poses))
+                    dex_hand.move_p(list(request.packet_request.poses))
                     yield Empty()
             elif request_name == "cancel_request":
                 LOG.info("Exiting...")
