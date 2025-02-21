@@ -2,12 +2,15 @@ import asyncio
 import logging
 import threading
 import uuid
-from typing import Iterable, Iterator, Union, AsyncIterator
+from typing import AsyncIterator, Iterable, Iterator, Union
 
 from google.protobuf.empty_pb2 import Empty
 from grpc import ServicerContext, StatusCode
 from injector import Injector, inject
 from models.arm_control import PiperArm
+
+# Import DexHandController from the new location
+from models.dexhand_controller import DexHandController
 from models.inspire_hand import InspireHand
 from repositories.repository import LocalRepository
 from ts.dexhand.v1.common_pb2 import ArmType, HandType, Side
@@ -16,10 +19,15 @@ from ts.dexhand.v1.dexhand_control_service_pb2 import (
     ConnectDexHandRequest,
     DisableDexHandRequest,
     EnableDexHandRequest,
+    GetJointStateRequest,
+    GetStatusRequest,
+    JointState,
     ModelType,
     ReceiveStatusRequest,
     ReceiveStatusResponse,
     SendPoseRequest,
+    SetJointRequest,
+    SetPoseRequest,
     SetupModelRequest,
 )
 from ts.dexhand.v1.dexhand_control_service_pb2_grpc import DexHandControlServiceServicer
@@ -32,9 +40,6 @@ from ts.dexhand.v1.dexhand_service_pb2 import (
     UpdateDexHandRequest,
 )
 from ts.dexhand.v1.dexhand_service_pb2_grpc import DexHandServiceServicer
-
-# Import DexHandController from the new location
-from models.dexhand_controller import DexHandController
 
 LOG = logging.getLogger(__name__)
 
@@ -187,6 +192,57 @@ class DexHandControlService(DexHandControlServiceServicer):
             # disable dex_hand
             dex_hand.disable()
             return Empty()
+
+    def SetPose(self, request: SetPoseRequest, context: ServicerContext):
+        LOG.info("SetPose request received.")
+
+        # Validate if DexHand exists
+        dex_hand = self.dex_hands.get(request.dexhand_id, None)
+
+        if dex_hand is None:
+            context.set_code(StatusCode.NOT_FOUND)
+            context.set_details(f"Invalid DexHand ID: {request.dexhand_id}")
+        else:
+            # set pose
+            dex_hand.move_p(list(request.poses))
+            return Empty()
+
+    def SetJoint(self, request: SetJointRequest, context: ServicerContext):
+        LOG.info("SetJoint request received.")
+
+        # Validate if DexHand exists
+        dex_hand = self.dex_hands.get(request.dexhand_id, None)
+
+        if dex_hand is None:
+            context.set_code(StatusCode.NOT_FOUND)
+            context.set_details(f"Invalid DexHand ID: {request.dexhand_id}")
+        else:
+            # set joint
+            dex_hand.move_j(list(request.angles))
+            return Empty()
+
+    def GetJointState(self, request: GetJointStateRequest, context: ServicerContext):
+        LOG.info("GetJointState request received.")
+
+        # Validate if DexHand exists
+        dex_hand = self.dex_hands.get(request.dexhand_id, None)
+
+        if dex_hand is None:
+            context.set_code(StatusCode.NOT_FOUND)
+            context.set_details(f"Invalid DexHand ID: {request.dexhand_id}")
+            return None
+        else:
+            # get status
+            status = dex_hand.get_status()
+            LOG.info(f"Status: {status}")
+            response = JointState()
+            response.id = dex_hand.id
+            response.name = dex_hand.name
+            response.angles.extend(status["joint_states"])
+            # Assuming 'status' dictionary contains 'arm_status' and 'joint_states'
+            # and that 'arm_status' is a protobuf message that needs to be packed.
+            LOG.info(f"Response: {response}")
+            return response
 
     def SendJoint(
         self, request_iterator: Iterable[SendPoseRequest], context: ServicerContext
