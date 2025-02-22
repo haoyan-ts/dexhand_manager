@@ -10,7 +10,6 @@ from entities.base_entities import Session, World
 from google.longrunning import operations_pb2
 from google.protobuf import any_pb2
 from google.protobuf.empty_pb2 import Empty
-from injector import inject
 from repositories.repository import LocalRepository
 from ts.dexhand.v1.session_service_pb2 import (
     Session as SessionProto,
@@ -28,7 +27,6 @@ LOG = logging.getLogger(__name__)
 
 
 class SessionService(SessionServiceServicer):
-    @inject
     def __init__(self, repository: LocalRepository) -> None:
         self._repository = repository
         super().__init__()

@@ -6,7 +6,6 @@ from typing import AsyncIterator, Iterable, Iterator, Union
 
 from google.protobuf.empty_pb2 import Empty
 from grpc import ServicerContext, StatusCode
-from injector import Injector, inject
 from models.arm_control import PiperArm
 
 # Import DexHandController from the new location
