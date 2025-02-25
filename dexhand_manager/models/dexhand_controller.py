@@ -73,6 +73,13 @@ class DexHandController:
         else:
             raise ValueError(f"Invalid model type: {self._model_type}")
 
+    def setup_interpolant(self, idx: int, data: list[float]):
+        self._model_type = ModelType.MODEL_TYPE_LERP
+        self._lerp = LinearInterpModel()
+
+        LOG.info(f"Setting {data} into idx: {idx}")
+        self._lerp.targets[idx, :] = np.array(data)
+
     def connect(self):
         with self._lock:
             self.__validate_instances()

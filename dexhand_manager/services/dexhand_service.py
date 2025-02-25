@@ -27,6 +27,7 @@ from ts.dexhand.v1.dexhand_control_service_pb2 import (
     SendPoseRequest,
     SetJointRequest,
     SetPoseRequest,
+    SetupInterpolantRequest,
     SetupModelRequest,
 )
 from ts.dexhand.v1.dexhand_control_service_pb2_grpc import DexHandControlServiceServicer
@@ -190,6 +191,24 @@ class DexHandControlService(DexHandControlServiceServicer):
         else:
             # disable dex_hand
             dex_hand.disable()
+            return Empty()
+
+    def SetupInterpolant(
+        self, request: SetupInterpolantRequest, context: ServicerContext
+    ):
+        LOG.info("SetupInterpolant request received.")
+
+        # Validate if DexHand exists
+        dex_hand = self.dex_hands.get(request.id, None)
+
+        if dex_hand is None:
+            context.set_code(StatusCode.NOT_FOUND)
+            context.set_details(f"Invalid DexHand ID: {request.id}")
+        else:
+            # setup interpolant
+            dex_hand.setup_interpolant(
+                request.target.index, list(request.target.angles)
+            )
             return Empty()
 
     def SetPose(self, request: SetPoseRequest, context: ServicerContext):

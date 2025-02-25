@@ -76,7 +76,8 @@ class LinearInterpModel:
             [2, 5, 6, 7],
         ]
 
-        self.targets = np.array([])
+        self.targets = np.zeros((8, 6))
+        self.target_dim = 6
 
         simplex_vertices = []
         for idx_array in self.simplex_vertex_idxs:
