@@ -20,4 +20,3 @@ if __name__ == "__main__":
         LOG.info("Shutting down DexHand Manager")
         loop.run_until_complete(loop.shutdown_asyncgens())
         sys.exit(0)
-

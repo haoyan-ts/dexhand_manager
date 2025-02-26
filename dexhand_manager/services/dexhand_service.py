@@ -222,8 +222,9 @@ class DexHandControlService(DexHandControlServiceServicer):
             context.set_details(f"Invalid DexHand ID: {request.dexhand_id}")
         else:
             # set pose
-            dex_hand.move_p(list(request.poses))
-            return Empty()
+            interpolated_joints = dex_hand.move_p(list(request.poses))
+
+            return JointState(id=request.dexhand_id, angles=interpolated_joints)
 
     def SetJoint(self, request: SetJointRequest, context: ServicerContext):
         LOG.info("SetJoint request received.")

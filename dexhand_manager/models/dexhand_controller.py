@@ -43,6 +43,7 @@ class DexHandController:
 
         self._setup_arm()
         self._setup_hand()
+        self._lerp = LinearInterpModel()
 
     def _setup_arm(self):
         if self.arm_type == ArmType.ARM_TYPE_PIPER:
@@ -64,7 +65,6 @@ class DexHandController:
         self._model_type = model_type
 
         if self._model_type == ModelType.MODEL_TYPE_LERP:
-            self._lerp = LinearInterpModel()
             targets = np.array(data)
             LOG.info(f"Setting targets: {targets.shape}")
             self._lerp.set_targets(targets)
@@ -75,10 +75,11 @@ class DexHandController:
 
     def setup_interpolant(self, idx: int, data: list[float]):
         self._model_type = ModelType.MODEL_TYPE_LERP
-        self._lerp = LinearInterpModel()
 
         LOG.info(f"Setting {data} into idx: {idx}")
-        self._lerp.targets[idx, :] = np.array(data)
+        self._lerp.set_target(idx, np.atleast_2d(data))
+        # self._lerp.targets[idx, :] = np.array(data)
+        # self._lerp.can_interpolate = True
 
     def connect(self):
         with self._lock:
@@ -148,11 +149,13 @@ class DexHandController:
     def move_p(self, pose: list[float]):
         with self._lock:
             if self._model_type == ModelType.MODEL_TYPE_IK:
-                self._move_p_ik(pose)
+                return self._move_p_ik(pose)
             elif self._model_type == ModelType.MODEL_TYPE_LERP:
-                self._move_p_lerp(pose)
+                return self._move_p_lerp(pose)
             else:
-                raise ValueError(f"Invalid model type: {self._model_type}")
+                raise ValueError(
+                    f"Invalid model type: {ModelType.Name(self._model_type)}"
+                )
 
     def _move_p_ik(self, pose: list[float]):
         with self._lock:
@@ -174,16 +177,20 @@ class DexHandController:
 
             assert self._arm is not None
             assert self._hand is not None
+            assert self._lerp is not None
 
             try:
                 # move to pose
                 # self._arm.move_p(pose)s
                 if not self._lerp.can_interpolate:
                     raise ValueError("Lerp model is not configured.")
-
-                joints = self._lerp.interpolate(np.array(pose))
+                position = np.array(pose[:3])
+                joints = self._lerp.interpolate(np.array(position)).tolist()
                 LOG.info(f"Interpolated joints: {joints}")
-                # self._arm.move_j(joints[0])
+
+                self._arm.move_j(joints)
+
+                return joints
 
             except Exception as e:
                 raise Exception(f"Failed to move to pose: {e}")
